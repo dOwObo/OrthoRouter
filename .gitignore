@@ -1,0 +1,76 @@
+# Python相關的
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+pip-wheel-metadata/
+*.pyo
+
+# 環境與依賴項
+env/
+venv/
+.venv/
+*.env
+.env.*
+*.venv/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# 進行機器學習專案時可能產生的檔案
+*.h5
+*.ckpt
+*.pth
+*.pt
+*.onnx
+*.pb
+*.tflite
+*.mlmodel
+*.pkl
+*.joblib
+
+# 訓練過程中的日誌與中間結果
+logs/
+*.log
+*.out
+*.txt
+*.csv
+*.tsv
+
+# 大型語言模型專案的權重或數據檔案
+weights/
+*.bin
+*.ckpt
+*.model
+*.tokenizer
+*.vocab
+*.tfrecord
+*.npz
+
+# 特定於 Hugging Face 等框架
+*.cache/
+*.lock
+*.json
+runs/
+*.metrics/
+
+# Docker與容器相關
+Dockerfile
+*.img
+*.simg
+
+# VSCode 或其他編輯器產生的配置檔案
+.vscode/
+*.code-workspace
+
+# 系統檔案
+.DS_Store
+Thumbs.db
+
+# 其他需要忽略的檔案
+*.swp
+*.bak
+*.tmp

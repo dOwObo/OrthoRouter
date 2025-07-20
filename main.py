@@ -14,7 +14,7 @@ import json
 import shutil
 from transformers import set_seed
 # DEL
-from model.layers import LoRALayer, MoEBlock
+from model.layers import LoRALayer, Router, MoEBlock
 from helper.utils import count_activated_params_t5moe
 
 logging.basicConfig(level=logging.INFO)
@@ -155,6 +155,18 @@ if __name__ == "__main__":
 
     model = custom_model.model  # 這邊使用的是 T5ForConditionalGeneration
 
+    # 計算 top-k 專家並設定給所有 MoEBlock
+    from model.layers import Router  # 確保有正確匯入
+    hidden_dim = custom_model.model.config.d_model
+    router = Router(hidden_dim, num_experts=4, top_k=2)  # 初始化 Router（傳入 T5 模型）
+    topk_experts = router.task_weight(train_dataset)  # 計算 top-k 專家組合
+    for name, module in model.named_modules():
+        if isinstance(module, MoEBlock):
+            module.set_task_top_k(topk_experts)
+    logger.info("✅ 已設定所有 MoEBlock 的 top-k 專家。")
+
+    model = custom_model.model  
+
     model.config.use_cache = False
     print("use_cache:", model.config.use_cache)
     
@@ -166,10 +178,8 @@ if __name__ == "__main__":
 
     for name, module in model.named_modules():
         if isinstance(module, LoRALayer):
-            for param in module.lora_As:
-                param.requires_grad = True  # LoRA A 參數解凍
-            for param in module.lora_Bs:
-                param.requires_grad = True  # LoRA B 參數解凍
+            module.lora_As.requires_grad = True
+            module.lora_Bs.requires_grad = True
         elif isinstance(module, MoEBlock):
             for expert in module.experts:
                 for param in expert.parameters():
@@ -201,8 +211,11 @@ if __name__ == "__main__":
     # 保存模型
     logger.info(f"Saving model to {output_dir}...")
     # custom_model.save_pretrained(output_dir)
+    custom_model.model = trainer.model
     save_custom_model(custom_model, output_dir)
-    logger.info("Model saved successfully.")
+    # logger.info("Model saved successfully.")
+    logger.info(f"Saving model with {sum(p.numel() for p in custom_model.model.parameters() if p.requires_grad)} trainable parameters")
+
 
     # 測試資料
     if test_data_files and test_labels_files:

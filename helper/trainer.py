@@ -30,7 +30,8 @@ class Trainer:
         eval_dataloader=None, 
         tokenizer=None, 
         labels_list=None, 
-        device=None
+        device=None,
+        task_id=None
     ):
         """
         初始化 Trainer。
@@ -41,12 +42,48 @@ class Trainer:
         self.tokenizer = tokenizer
         self.labels_list = labels_list
         self.device = device or torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.task_id = task_id
         self.model.to(self.device)
         self.logger = logging.getLogger(__name__)
 
         # 初始化列表以存儲損失和準確率
         self.train_losses = []
         self.val_accuracies = []
+        
+        # 專家選擇統計
+        self.expert_selection_history = []
+
+    def log_expert_selection(self):
+        """
+        記錄當前專家選擇情況
+        """
+        selection_stats = {}
+        total_selections = 0
+        
+        for name, module in self.model.named_modules():
+            if isinstance(module, MoEBlock):
+                selection_counts = module.selection_counts.clone().cpu().numpy()
+                total_selections += selection_counts.sum()
+                selection_stats[name] = {
+                    'selection_counts': selection_counts,
+                    'current_task_id': module.current_task_id,
+                    'task_top_k_experts': module.task_top_k_experts
+                }
+        
+        self.expert_selection_history.append(selection_stats)
+        
+        # 只在有選擇時才輸出統計信息，並且簡化輸出
+        if total_selections > 0:
+            print(f"[Trainer] 任務 {self.task_id} 專家選擇統計 (總計 {total_selections} 次):")
+            for name, stats in selection_stats.items():
+                expert_usage = stats['selection_counts'] / total_selections * 100
+                # 只顯示使用率 > 5% 的專家
+                active_experts = [(i, usage) for i, usage in enumerate(expert_usage) if usage > 5]
+                if active_experts:
+                    expert_str = ", ".join([f"E{i}:{usage:.1f}%" for i, usage in active_experts])
+                    print(f"  {name}: {expert_str}")
+        else:
+            print(f"[Trainer] 任務 {self.task_id} 尚未有專家選擇記錄")
 
     def train(
         self, 
@@ -128,13 +165,19 @@ class Trainer:
             self.train_losses.append(avg_loss)
             print(f"Epoch {epoch + 1} - Loss: {avg_loss:.4f}")
 
+            # 記錄專家選擇情況（每個 epoch 一次）
+            self.log_expert_selection()
+
             # 驗證
             if self.eval_dataloader is not None:
+                print(f"Epoch {epoch + 1} - 開始驗證...")
                 accuracy = self.validate()
                 self.val_accuracies.append(accuracy)
+                print(f"Epoch {epoch + 1} - Validation Accuracy: {accuracy:.4f}")
                 if accuracy > best_accuracy:
                     best_accuracy = accuracy
                     self.save_model(output_dir, f"best_model_epoch_{epoch + 1}.bin")
+                    print(f"Epoch {epoch + 1} - 新的最佳準確率！已保存模型。")
             else:
                 print("No eval_dataloader provided, skipping validation.")
 

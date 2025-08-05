@@ -50,10 +50,11 @@ def evaluate(model, dataloader, tokenizer, labels_list):
                 gold_text = tokenizer.decode(label_seq, skip_special_tokens=True).strip()
                 gold_texts.append(gold_text)
 
-            # Debug: 印出前幾筆看看預測 vs. 標籤
-            if batch_idx < 2:  # 前2個batch做檢查
-                for i, (p, g) in enumerate(zip(predictions, gold_texts)):
-                    print(f"[DEBUG] batch#{batch_idx} sample#{i}  PRED: '{p}' | GOLD: '{g}'")
+            # Debug: 只在第一個 batch 的前幾個樣本做檢查
+            if batch_idx == 0:
+                print(f"[DEBUG] 前3個樣本的預測 vs. 標籤:")
+                for i, (p, g) in enumerate(zip(predictions[:3], gold_texts[:3])):
+                    print(f"  Sample {i}: PRED='{p}' | GOLD='{g}'")
 
             # 比對
             for pred, gold in zip(predictions, gold_texts):
@@ -62,7 +63,7 @@ def evaluate(model, dataloader, tokenizer, labels_list):
                 total += 1
 
     accuracy = correct / total if total else 0
-    print(f"Accuracy: {accuracy:.4f}")
+    print(f"Accuracy: {accuracy:.4f} ({correct}/{total})")
     return accuracy
 
 # def visualize_expert_selection(selection_counts, output_dir="."):

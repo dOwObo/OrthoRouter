@@ -27,8 +27,8 @@ for seed in 438 689 744 329 251; do
     first_run=true
 
     # 初始化測試數據文件和標籤文件的數組（每個 seed 可視情況重置或保留）
-    test_data_files=()
-    test_labels_files=()
+    # test_data_files=()
+    # test_labels_files=()
 
     # 遍歷每個數據集進行訓練和評估
     for dataset in "${datasets[@]}"; do
@@ -54,8 +54,8 @@ for seed in 438 689 744 329 251; do
         mkdir -p $output_dir
 
         # 將測試數據和標籤文件添加到數組中
-        test_data_files+=("$test_data")
-        test_labels_files+=("$test_labels")
+        # test_data_files+=("$test_data")
+        # test_labels_files+=("$test_labels")
 
         echo "開始訓練 $dataset with seed $seed..."
         if [ "$first_run" = true ]; then
@@ -66,8 +66,8 @@ for seed in 438 689 744 329 251; do
                 --output_dir "$output_dir" \
                 --eval_file "$eval_file" \
                 --eval_labels_files "$eval_labels" \
-                --test_data_files "${test_data_files[@]}" \
-                --test_labels_files "${test_labels_files[@]}" \
+                --test_data_files "$test_data" \
+                --test_labels_files "$test_labels" \
                 --seed $seed
             first_run=false
         else
@@ -79,8 +79,8 @@ for seed in 438 689 744 329 251; do
                 --output_dir "$output_dir" \
                 --eval_file "$eval_file" \
                 --eval_labels_files "$eval_labels" \
-                --test_data_files "${test_data_files[@]}" \
-                --test_labels_files "${test_labels_files[@]}" \
+                --test_data_files "$test_data" \
+                --test_labels_files "$test_labels" \
                 --seed $seed
         fi
 

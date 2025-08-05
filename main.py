@@ -20,6 +20,7 @@ from helper.utils import count_activated_params_t5moe
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Train a custom T5 model with LoRA and MoE for Continual Learning.")
     parser.add_argument('--data_file', type=str, required=True, help='Path to the training data file (JSON).')
@@ -158,12 +159,37 @@ if __name__ == "__main__":
     # 計算 top-k 專家並設定給所有 MoEBlock
     from model.layers import Router  # 確保有正確匯入
     hidden_dim = custom_model.model.config.d_model
-    router = Router(hidden_dim, num_experts=4, top_k=2)  # 初始化 Router（傳入 T5 模型）
-    topk_experts = router.task_weight(train_dataset)  # 計算 top-k 專家組合
+    
+    # 獲取任務ID
+    task_id = train_processor.get_task_from_dataset(train_processor.dataset_name)
+    task_id_mapping = {"SC": 0, "TC": 1, "NLI": 2, "QQP": 3, "WiC": 4, "MultiRC": 5, "COPA": 6, "BoolQA": 7}
+    task_id = task_id_mapping.get(task_id, 0)
+    
+    print(f"[Main] 當前任務: {train_processor.task}, 任務ID: {task_id}")
+    
+    # 初始化 Router 並為新任務初始化專家
+    router = Router(hidden_dim, num_experts=4, top_k=2)
+    # 確保 Router 在正確的裝置上
+    router = router.to(device)
+    
+    # 為新任務初始化專家向量
+    router.initialize_expert_for_task(task_id, train_dataset, custom_model.model)
+    
+    # 使用改進的 task_weight 方法計算 top-k 專家
+    topk_experts = router.task_weight(
+        dataset=train_dataset, 
+        encoder_model=custom_model.model, 
+        task_id=task_id, 
+        strategy='confident'  # 使用置信度篩選策略
+    )
+    
+    # 設定所有 MoEBlock 的 top-k 專家和任務ID
     for name, module in model.named_modules():
         if isinstance(module, MoEBlock):
-            module.set_task_top_k(topk_experts)
-    logger.info("✅ 已設定所有 MoEBlock 的 top-k 專家。")
+            module.initialize_task_experts(task_id, train_dataset, custom_model.model)
+            module.set_task_top_k(topk_experts, task_id)
+    
+    logger.info(f"✅ 已為任務 {task_id} 設定所有 MoEBlock 的 top-k 專家。")
 
     model = custom_model.model  
 
@@ -197,7 +223,8 @@ if __name__ == "__main__":
         # eval_dataloader=eval_dataloader,
         tokenizer=train_processor.tokenizer,
         labels_list=train_processor.labels_list,
-        device=device
+        device=device,
+        task_id=task_id  # 傳入任務ID
     )
 
     # 開始訓練

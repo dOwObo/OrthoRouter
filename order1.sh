@@ -27,7 +27,7 @@ for seed in 438 689 744 329 251; do
     model_path=""
     first_run=true
 
-    # 初始化測試數據文件和標籤文件的數組（每個 seed 可視情況重置或保留）
+    # 初始化測試數據文件和標籤文件的數組
     test_data_files=()
     test_labels_files=()
 
@@ -54,11 +54,13 @@ for seed in 438 689 744 329 251; do
         output_dir="$save_dir/$dataset"
         mkdir -p $output_dir
 
-        # 將測試數據和標籤文件添加到數組中
+        # 添加當前數據集的測試數據和標籤文件到測試數組
         test_data_files+=("$test_data")
         test_labels_files+=("$test_labels")
 
+        # 執行訓練
         echo "開始訓練 $dataset with seed $seed..."
+
         if [ "$first_run" = true ]; then
             # 首次訓練，不傳遞 --model_path
             python main.py \
@@ -87,7 +89,7 @@ for seed in 438 689 744 329 251; do
 
         echo "訓練完成: $dataset with seed $seed"
 
-        # 更新模型路徑為最新的模型
+        # 更新模型路徑為最新的模型目錄
         model_path="$output_dir"
 
         # 等待片刻以確保日誌寫入

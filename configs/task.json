@@ -1,0 +1,30 @@
+{
+    "SC": [
+        {
+            "dataset name": "amazon"
+        }
+    ],
+    "TC": [     
+        {
+            "dataset name": "yahoo"
+        },
+        {
+            "dataset name": "dbpedia"
+        },
+        {
+            "dataset name": "agnews"
+        } 
+    ],
+    "NLI": [
+    ],
+    "QQP": [  
+    ],
+    "WiC": [ 
+    ],
+    "MultiRC": [ 
+    ],
+    "COPA": [ 
+    ],
+    "BoolQA": [
+    ]
+}

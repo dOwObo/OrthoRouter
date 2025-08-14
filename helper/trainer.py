@@ -2,7 +2,7 @@
 import torch
 from torch.optim import AdamW
 from transformers.optimization import Adafactor
-from torch.cuda.amp import autocast, GradScaler
+from torch.amp import autocast, GradScaler
 from transformers import get_scheduler
 from tqdm import tqdm
 from helper.utils import evaluate, visualize_expert_selection
@@ -11,6 +11,7 @@ from model.layers import MoEBlock, Router, LoRALayer
 import logging
 import matplotlib.pyplot as plt
 import os
+import csv
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -30,7 +31,8 @@ class Trainer:
         eval_dataloader=None, 
         tokenizer=None, 
         labels_list=None, 
-        device=None
+        device=None,
+        task_id=None
     ):
         """
         初始化 Trainer。
@@ -41,12 +43,48 @@ class Trainer:
         self.tokenizer = tokenizer
         self.labels_list = labels_list
         self.device = device or torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.task_id = task_id
         self.model.to(self.device)
         self.logger = logging.getLogger(__name__)
 
         # 初始化列表以存儲損失和準確率
         self.train_losses = []
         self.val_accuracies = []
+
+        # 專家選擇統計
+        self.expert_selection_history = []
+    
+    def log_expert_selection(self):
+        """
+        記錄當前專家選擇情況
+        """
+        selection_stats = {}
+        total_selections = 0
+        
+        for name, module in self.model.named_modules():
+            if isinstance(module, MoEBlock):
+                selection_counts = module.selection_counts.clone().cpu().numpy()
+                total_selections += selection_counts.sum()
+                selection_stats[name] = {
+                    'selection_counts': selection_counts,
+                    'current_task_id': module.current_task_id,
+                    'task_top_k_experts': module.task_top_k_experts
+                }
+        
+        self.expert_selection_history.append(selection_stats)
+        
+        # 只在有選擇時才輸出統計信息，並且簡化輸出
+        if total_selections > 0:
+            print(f"[Trainer] 任務 {self.task_id} 專家選擇統計 (總計 {total_selections} 次):")
+            for name, stats in selection_stats.items():
+                expert_usage = stats['selection_counts'] / total_selections * 100
+                # 只顯示使用率 > 5% 的專家
+                active_experts = [(i, usage) for i, usage in enumerate(expert_usage) if usage > 5]
+                if active_experts:
+                    expert_str = ", ".join([f"E{i}:{usage:.1f}%" for i, usage in active_experts])
+                    print(f"  {name}: {expert_str}")
+        else:
+            print(f"[Trainer] 任務 {self.task_id} 尚未有專家選擇記錄")
 
     def train(
         self, 
@@ -76,8 +114,16 @@ class Trainer:
             num_training_steps=num_training_steps
         )
         
-        scaler = GradScaler()
+        scaler = GradScaler(device='cuda')
         best_accuracy = 0.0
+        # 準備度量輸出檔
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        metrics_csv_path = os.path.join(output_dir, 'metrics.csv')
+        if not os.path.exists(metrics_csv_path):
+            with open(metrics_csv_path, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(['epoch', 'train_loss', 'val_accuracy'])
         for epoch in range(num_epochs):
             self.model.train()
             total_loss = 0.0
@@ -133,14 +179,23 @@ class Trainer:
             print(f"Epoch {epoch + 1} - Loss: {avg_loss:.4f}")
 
             # 驗證
+            val_accuracy = None
             if self.eval_dataloader is not None:
                 accuracy = self.validate()
                 self.val_accuracies.append(accuracy)
+                dataset = os.path.basename(os.path.normpath(output_dir))
+                print(f"{dataset} Epoch {epoch + 1} - Validation Accuracy: {accuracy:.4f}")
+                val_accuracy = accuracy
                 if accuracy > best_accuracy:
                     best_accuracy = accuracy
                     self.save_model(output_dir, f"best_model_epoch_{epoch + 1}.bin")
             else:
                 print("No eval_dataloader provided, skipping validation.")
+
+            # 追加寫入本 epoch 的度量
+            with open(metrics_csv_path, 'a', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow([epoch + 1, float(avg_loss), (None if val_accuracy is None else float(val_accuracy))])
 
         selection_counts = self.collect_selection_counts()
         print("selection_counts", selection_counts)

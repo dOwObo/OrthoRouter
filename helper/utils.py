@@ -51,9 +51,10 @@ def evaluate(model, dataloader, tokenizer, labels_list):
                 gold_texts.append(gold_text)
 
             # Debug: 印出前幾筆看看預測 vs. 標籤
-            if batch_idx < 2:  # 前2個batch做檢查
+            if batch_idx < 5:
+                print(f"[DEBUG] Batch {batch_idx} 樣本的預測 vs. 標籤:")
                 for i, (p, g) in enumerate(zip(predictions, gold_texts)):
-                    print(f"[DEBUG] batch#{batch_idx} sample#{i}  PRED: '{p}' | GOLD: '{g}'")
+                    print(f"  Sample {i}: PRED='{p}' | GOLD='{g}'")
 
             # 比對
             for pred, gold in zip(predictions, gold_texts):
